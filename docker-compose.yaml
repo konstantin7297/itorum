@@ -1,0 +1,46 @@
+version: '3.9'
+
+networks:
+  project:
+    driver: bridge
+
+services:
+  database:
+    container_name: itorum-db
+    image: postgres:latest
+    stop_signal: SIGKILL
+    restart: always
+    env_file:
+      - '.env'
+    ports:
+      - '${POSTGRES_PORT}:5432'
+    volumes:
+      - ./database/:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    networks:
+      - project
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d ${POSTGRES_DB} -U ${POSTGRES_USER}']
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    container_name: itorum-back
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    links:
+      - database
+    env_file:
+      - '.env'
+    ports:
+      - '${PORT}:8000'
+    networks:
+      - project
+    depends_on:
+      database:
+        condition: service_healthy
