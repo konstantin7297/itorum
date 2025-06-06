@@ -28,7 +28,6 @@ DEBUG = os.getenv("DEBUG", "1") == "1"
 ALLOWED_HOSTS = ["localhost", "0.0.0.0", "127.0.0.1"] + os.getenv("ALLOWED_HOSTS", "").split(",")
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -38,7 +37,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework.authtoken',
-    'events_poster.apps.EventsPosterConfig',
+    'django_filters',
+    'user.apps.UserConfig',
+    'events.apps.EventsConfig',
 ]
 
 MIDDLEWARE = [
@@ -73,24 +74,16 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-DATABASE_DIR = BASE_DIR / "database"
-DATABASE_DIR.mkdir(exist_ok=True)
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': DATABASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('PG_DATA', 'db'),
+        'USER': os.getenv('PG_USER', 'admin'),
+        'PASSWORD': os.getenv('PG_PASS', 'admin'),
+        'HOST': os.getenv('PG_HOST', 'localhost'),
+        'PORT': os.getenv('PG_PORT', 5432),
     }
 }
-# DATABASES = {  TODO: заменить на postgres
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.getenv('POSTGRES_DB', 'db'),
-#         'USER': os.getenv('POSTGRES_USER', 'admin'),
-#         'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'admin'),
-#         'HOST': os.getenv('POSTGRES_HOST', 'database'),
-#         'PORT': os.getenv('POSTGRES_PORT', 5432),
-#     }
-# }
 
 
 # Password validation
@@ -142,4 +135,14 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_FILTER_BACKENDS': [
+        "django_filters.rest_framework.DjangoFilterBackend",
+    ],
 }
+
+# CELERY settings
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
+
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
