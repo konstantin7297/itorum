@@ -9,9 +9,9 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from core.tasks import send_create_booking_notification, send_delete_booking_notification
-from .models import Event, Tag
-from .serializers import EventSerializer
+from utils.tasks import send_create_booking_notification, send_delete_booking_notification
+from events.models import Event, Tag
+from events.serializers import EventSerializer
 
 
 class EventFilter(FilterSet):
@@ -114,48 +114,17 @@ class EventView(ModelViewSet):
     def create_booking(self, request, pk=None):
         """ Бронирует место на событие """
         event = self.get_object()
-        user = request.user
-
-        if event.bookings.filter(user=user).exists():
-            return Response(
-                {'detail': 'Вы уже забронировали это событие'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if event.seats <= event.bookings.count():
-            return Response(
-                {'detail': 'Мест нет'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        event.bookings.create(user=user)
-        send_create_booking_notification.delay(user.id, event.id)
-
-        return Response(
-            {'status': 'Бронирование успешно'},
-            status=status.HTTP_201_CREATED
-        )
+        event.create_booking(request.user.id)
+        send_create_booking_notification.delay(request.user.id, event.id)
+        return Response({'status': 'Бронирование успешно'}, status=201)
 
     @action(detail=True, methods=['delete'], permission_classes=[IsAuthenticated])
     def delete_booking(self, request, pk=None):
         """ Отменяет бронь места на событие """
         event = self.get_object()
-        user = request.user
-
-        booking = event.bookings.filter(user=user).first()
-        if not booking:
-            return Response(
-                {'detail': 'Бронирование не найдено'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        booking.delete()
-        send_delete_booking_notification.delay(user.id, event.id)
-
-        return Response(
-            {'status': 'Бронирование отменено'},
-            status=status.HTTP_200_OK
-        )
+        event.delete_booking(request.user.id)
+        send_delete_booking_notification.delay(request.user.id, event.id)
+        return Response({'status': 'Бронирование отменено'}, status=200)
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def my_events(self, request):

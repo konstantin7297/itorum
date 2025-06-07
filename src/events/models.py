@@ -1,6 +1,7 @@
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.auth.models import User
-from django.db import models
+from django.db import models, transaction
+from rest_framework.exceptions import ValidationError
 
 
 class Tag(models.Model):
@@ -11,15 +12,6 @@ class Tag(models.Model):
 
 
 class Event(models.Model):
-    PENDING = 'pending'
-    CANCELLED = 'cancelled'
-    COMPLETED = 'completed'
-    STATUS_CHOICES = [
-        (PENDING, 'Ожидается'),
-        (CANCELLED, 'Отменено'),
-        (COMPLETED, 'Завершено'),
-    ]
-
     class Meta:
         verbose_name = "Событие"
         verbose_name_plural = "События"
@@ -27,15 +19,41 @@ class Event(models.Model):
             GinIndex(fields=['description'], name='gin_event_description'),
         ]
 
+    class Status(models.TextChoices):
+        CANCELLED = 0, 'cancelled'
+        PENDING = 1, 'pending'
+        COMPLETED = 2, 'completed'
+
     title = models.CharField(max_length=100)
     description = models.TextField(max_length=500)
     start_time = models.DateTimeField()
     location = models.CharField(max_length=100)
     seats = models.PositiveIntegerField()
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    status = models.PositiveIntegerField(choices=Status.choices, default=Status.PENDING)
     organizer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='events')
     tags = models.ManyToManyField(Tag, blank=True, related_name='events')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @transaction.atomic()
+    def create_booking(self, user_id):
+        """ Бронирование места на мероприятие """
+        if self.bookings.filter(user_id=user_id).exists():
+            raise ValidationError('Вы уже забронировали это событие')
+
+        if self.seats <= self.bookings.count():
+            raise ValidationError('Мест нет')
+
+        return self.bookings.create(user_id=user_id)
+
+    @transaction.atomic()
+    def delete_booking(self, user_id):
+        """ Отмена бронирования места на мероприятие """
+        book = self.bookings.filter(user_id=user_id).first()
+
+        if not book:
+            raise ValidationError('Бронирование не найдено')
+
+        book.delete()
 
 
 class Booking(models.Model):

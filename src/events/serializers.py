@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Event, Tag
+from events.models import Event, Tag
 
 
 class TagSerializer(serializers.ModelSerializer):
