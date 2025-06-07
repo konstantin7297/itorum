@@ -2,6 +2,13 @@ from django.contrib.auth.models import User
 from django.db import models
 
 
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Event(models.Model):
     PENDING = 'pending'
     CANCELLED = 'cancelled'
@@ -23,6 +30,7 @@ class Event(models.Model):
     seats = models.PositiveIntegerField()
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     organizer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='events')
+    tags = models.ManyToManyField(Tag, blank=True, related_name='events')
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -40,25 +48,3 @@ class Notification(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='notifications')
     message = models.TextField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
-
-
-class Rating(models.Model):
-    SCORE_CHOICES = [
-        (1, 1),
-        (2, 2),
-        (3, 3),
-        (4, 4),
-        (5, 5),
-    ]
-
-    class Meta:
-        unique_together = ('user', 'event')
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ratings')
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='ratings')
-    score = models.PositiveSmallIntegerField(choices=SCORE_CHOICES)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-
-class Tag(models.Model):  # TODO: теги для событий (многие-ко-многим).
-    pass

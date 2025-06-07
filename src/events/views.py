@@ -1,7 +1,7 @@
 from django.db.models import Q, QuerySet, F, Count
 from django.utils.timezone import now
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet, CharFilter, \
-    ChoiceFilter, DateFilter, BooleanFilter
+    ChoiceFilter, DateFilter, BooleanFilter, ModelMultipleChoiceFilter
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
@@ -9,11 +9,17 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from core.tasks import send_create_booking_notification, send_delete_booking_notification
-from .models import Event
+from .models import Event, Tag
 from .serializers import EventSerializer
 
 
 class EventFilter(FilterSet):
+    tags = ModelMultipleChoiceFilter(
+        field_name='tags__name',
+        to_field_name='name',
+        queryset=Tag.objects.all(),
+        conjoined=False,
+    )
     location = CharFilter(field_name='location', lookup_expr='icontains')
     status = ChoiceFilter(field_name='status', choices=Event.STATUS_CHOICES)
     date = DateFilter(field_name='start_time', lookup_expr='date')
@@ -21,7 +27,7 @@ class EventFilter(FilterSet):
 
     class Meta:
         model = Event
-        fields = ['location', 'status', 'date', 'free_seats']
+        fields = ['tags', 'location', 'status', 'date', 'free_seats']
 
     def filter_free_seats(self, queryset, name, value):
         if value:
@@ -31,9 +37,9 @@ class EventFilter(FilterSet):
         return queryset
 
 
-class EventView(ModelViewSet):  # TODO: Пагинацию поправить? т.к. sorting_events отдает список а не кс.
+class EventView(ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    queryset = Event.objects.prefetch_related('bookings').all()
+    queryset = Event.objects.prefetch_related('bookings', 'tags').all()
     serializer_class = EventSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = EventFilter
