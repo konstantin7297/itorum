@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'django_filters',
-    'user.apps.UserConfig',
+    'utils.apps.UtilsConfig',
     'events.apps.EventsConfig',
 ]
 
