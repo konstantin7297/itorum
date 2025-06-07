@@ -1,3 +1,4 @@
+from django.contrib.postgres.indexes import GinIndex
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -22,6 +23,9 @@ class Event(models.Model):
     class Meta:
         verbose_name = "Событие"
         verbose_name_plural = "События"
+        indexes = [
+            GinIndex(fields=['description'], name='gin_event_description'),
+        ]
 
     title = models.CharField(max_length=100)
     description = models.TextField(max_length=500)

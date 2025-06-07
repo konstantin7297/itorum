@@ -1,3 +1,4 @@
+from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from django.db.models import Q, QuerySet, F, Count
 from django.utils.timezone import now
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet, CharFilter, \
@@ -14,6 +15,7 @@ from .serializers import EventSerializer
 
 
 class EventFilter(FilterSet):
+    search = CharFilter(method='filter_search', label='Поиск по описанию')
     tags = ModelMultipleChoiceFilter(
         field_name='tags__name',
         to_field_name='name',
@@ -27,7 +29,7 @@ class EventFilter(FilterSet):
 
     class Meta:
         model = Event
-        fields = ['tags', 'location', 'status', 'date', 'free_seats']
+        fields = ['search', 'tags', 'location', 'status', 'date', 'free_seats']
 
     def filter_free_seats(self, queryset, name, value):
         if value:
@@ -35,6 +37,14 @@ class EventFilter(FilterSet):
                 .annotate(booked_count=Count('bookings')) \
                 .filter(seats__gt=F('booked_count'))
         return queryset
+
+    def filter_search(self, queryset, name, value):
+        if not value:
+            return queryset
+
+        return queryset \
+            .annotate(rank=SearchRank(SearchVector('description'), SearchQuery(value))) \
+            .filter(rank__gte=0.1).order_by('-rank')
 
 
 class EventView(ModelViewSet):
