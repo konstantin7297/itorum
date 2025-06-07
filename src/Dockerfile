@@ -11,4 +11,5 @@ RUN python -m pip install --upgrade pip && python -m pip install --no-deps --no-
 
 COPY . .
 
+RUN python manage.py migrate
 CMD ["gunicorn", "core.wsgi:application", "--bind", "0.0.0.0:8000"]

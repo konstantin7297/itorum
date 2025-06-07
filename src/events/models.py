@@ -23,6 +23,7 @@ class Event(models.Model):
     seats = models.PositiveIntegerField()
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     organizer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='events')
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class Booking(models.Model):
@@ -39,7 +40,6 @@ class Notification(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='notifications')
     message = models.TextField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
-    sent = models.BooleanField(default=False)
 
 
 class Rating(models.Model):

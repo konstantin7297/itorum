@@ -1,9 +1,9 @@
-from django.db.models import Q
+from django.db.models import Q, QuerySet, F, Count
 from django.utils.timezone import now
-from django_filters.rest_framework import DjangoFilterBackend
+from django_filters.rest_framework import DjangoFilterBackend, FilterSet, CharFilter, \
+    ChoiceFilter, DateFilter, BooleanFilter
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -13,19 +13,40 @@ from .models import Event
 from .serializers import EventSerializer
 
 
-class EventView(ModelViewSet):
+class EventFilter(FilterSet):
+    location = CharFilter(field_name='location', lookup_expr='icontains')
+    status = ChoiceFilter(field_name='status', choices=Event.STATUS_CHOICES)
+    date = DateFilter(field_name='start_time', lookup_expr='date')
+    free_seats = BooleanFilter(method='filter_free_seats')
+
+    class Meta:
+        model = Event
+        fields = ['location', 'status', 'date', 'free_seats']
+
+    def filter_free_seats(self, queryset, name, value):
+        if value:
+            return queryset \
+                .annotate(booked_count=Count('bookings')) \
+                .filter(seats__gt=F('booked_count'))
+        return queryset
+
+
+class EventView(ModelViewSet):  # TODO: Пагинацию поправить? т.к. sorting_events отдает список а не кс.
     permission_classes = [IsAuthenticatedOrReadOnly]
     queryset = Event.objects.prefetch_related('bookings').all()
     serializer_class = EventSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = EventFilter
 
-    def get_queryset(self):
+    def sorting_events(self, events: QuerySet) -> list:
+        """ Своя сортировка событий для отдачи """
         current_time = now()
 
-        upcoming = Event.objects \
+        upcoming = events \
             .filter(start_time__gte=current_time, status=Event.PENDING) \
             .order_by('start_time')
 
-        past_cancelled = Event.objects \
+        past_cancelled = events \
             .filter(Q(start_time__lt=current_time) | Q(status__in=[Event.CANCELLED, Event.COMPLETED])) \
             .exclude(Q(start_time__gte=current_time, status=Event.PENDING)) \
             .order_by('-start_time')
@@ -33,9 +54,18 @@ class EventView(ModelViewSet):
         return list(upcoming) + list(past_cancelled)
 
     def perform_create(self, serializer):
+        """ Создание события """
         serializer.save(organizer=self.request.user)
 
+    def list(self, request, *args, **kwargs):
+        """ Получение списка всех событий """
+        events = self.filter_queryset(self.get_queryset())
+        sorted_events = self.sorting_events(events)
+        serializer = self.get_serializer(sorted_events, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     def update(self, request, *args, **kwargs):
+        """ Обновляет событие """
         event = self.get_object()
 
         if event.organizer != request.user:
@@ -47,6 +77,7 @@ class EventView(ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
+        """ Удаляет событие """
         event = self.get_object()
         if event.organizer != request.user:
             return Response(
@@ -69,15 +100,15 @@ class EventView(ModelViewSet):
         event = self.get_object()
         user = request.user
 
-        if event.seats <= event.bookings.count():
-            return Response(
-                {'detail': 'Мест нет'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         if event.bookings.filter(user=user).exists():
             return Response(
                 {'detail': 'Вы уже забронировали это событие'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if event.seats <= event.bookings.count():
+            return Response(
+                {'detail': 'Мест нет'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -120,5 +151,6 @@ class EventView(ModelViewSet):
             status=Event.PENDING
         ).distinct().order_by('start_time')
 
-        serializer = self.get_serializer(events, many=True)
-        return Response(serializer.data)
+        sorted_events = self.sorting_events(events)
+        serializer = self.get_serializer(sorted_events, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
